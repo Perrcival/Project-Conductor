@@ -5,10 +5,110 @@
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
-  provider = "prisma-client"
-  output   = "../app/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+// 1. User & Identity (Member management)
+
+model User {
+  id          String    @id @default(cuid())
+  lineId      String    @unique   //ID line from user
+  displayName String            // line username
+  avatarUrl   String?           // line profile picture
+
+  //personal info
+  realName    String?
+  mobileNo    String?
+  isAdmin     Boolean   @default(false) //True = Artist Manager
+  createdAt   DateTime  @default(now())
+
+  // Relationship
+  events          EventMember[]
+  proposedSongs   Song[]
+  assignments     SongAssignment[]
+  availabilities  Availability[]
+}
+
+// 2. Event Management
+
+model Event {
+  id            String  @id @default(cuid())
+  name          String   //event name
+  description   String?
+  eventDate     DateTime?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime @default(now())
+
+  // Relationships
+  members         EventMember[]
+  songs           Song[]
+  availabilities  Availability[]
+}
+
+// Table for join member to event (1 member -> many event (1 to many))
+model EventMember {
+  id        String @id @default(cuid())
+  eventId   String
+  event     Event @relation(fields: [eventId], references: [id])
+  userId    String
+  user      User  @relation(fields: [userId], references: [id])
+  role      String? //instrument of staff
+  @@unique([eventId, userId]) // prevent person for join already joined event
+}
+
+// 3. Song Management
+model Song {
+  id              String  @id @default(cuid())
+  title           String
+  artist          String
+  referenceUrl    String?   //youtube song reference link
+  note            String?   //optional note (for original key signature)
+  changeNote      String?   //note for changed key signature
+  
+  status          SongStatus @default(PROPOSED)
+  eventId         String
+  event           Event @relation(fields: [eventId], references: [id])
+  proposedById    String
+  proposedBy      User  @relation(fields: [proposedById], references: [id])
+
+  assignments     SongAssignment[]
+  createdAt       DateTime @default(now())
+}
+
+// *Important!* Player Table (for checking availiable time for rehearsing)
+model SongAssignment {
+  id          String  @id @default(cuid())
+  songId      String
+  song        Song    @relation(fields: [songId], references: [id])
+  userId      String
+  user        User    @relation(fields: [userId], references: [id])
+  instrument  String
+
+  @@unique([songId, userId]) // preventing same person perform the same song again
+}
+
+enum SongStatus {
+  PROPOSED  //เสนอมาแล้ว
+  APPROVED  //ผ่าน
+  REJECTED  //ปัดตก
+}
+
+// 4. Scheduling
+model Availability {
+  id        String  @id @default(cuid())
+  userId    String
+  user      User    @relation(fields: [userId], references: [id])
+  eventId   String
+  event     Event   @relation(fields: [eventId], references: [id])
+
+  // availiable time
+  date      DateTime
+  startTime DateTime // range of availiable time
+  endTime   DateTime
+
+  @@index([eventId, date])
 }
